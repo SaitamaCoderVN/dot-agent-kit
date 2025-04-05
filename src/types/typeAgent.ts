@@ -3,7 +3,9 @@ import { ApiPromise } from '../tools/substrace';
 /** Define type for chain configuration **/
 export interface ChainConfig {
   url: string;
-  name: string; 
+  name: string;
+  type: 'RelayChain' | 'ParaChain';
+  paraId?: number;
 }
 
 /** Define interface for API connection **/

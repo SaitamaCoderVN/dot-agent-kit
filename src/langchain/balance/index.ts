@@ -1,27 +1,28 @@
-import { tool } from '@langchain/core/tools';
+import { DynamicTool } from '@langchain/core/tools';
 import { z } from 'zod';
 import { PolkadotLangTools } from '../../tools/index';
 
+interface BalanceParams {
+  chain: string;
+}
+
 export const checkBalanceTool = (tools: PolkadotLangTools) => {
-  return tool({
+  return new DynamicTool({
     name: "check_balance",
     description: "Check balance of the agent's account on a specific chain",
-    schema: z.object({
-      chain: z.string().describe("The chain name to check balance on (e.g., 'polkadot', 'kusama', 'westend', 'westend_asset_hub', etc.)"),
-    }),
-    func: async ({ chain }) => {
+    func: async (input: string) => {
       try {
+        const params = JSON.parse(input) as BalanceParams;
+        const { chain } = params;
+        
         const balance = await tools.checkBalance(chain);
-        return {
-          content: `Balance on ${chain}: ${balance.toFixed(4)}`,
-          tool_call_id: `balance_${Date.now()}`,
-        };
+        return `Balance on ${chain}: ${balance.toFixed(4)}`;
       } catch (error) {
-        return {
-          content: `Error checking balance on ${chain}: ${error.message}`,
-          tool_call_id: `balance_error_${Date.now()}`,
-        };
+        if (error instanceof Error) {
+          return `Error checking balance: ${error.message}`;
+        }
+        return `Error checking balance: ${String(error)}`;
       }
-    },
+    }
   });
 };

@@ -1,4 +1,5 @@
 import { chainDescriptorRegistry } from './chainRegistry';
+import { west, west_asset_hub } from '@polkadot-api/descriptors';
 
 /**
  * Configuration for chain aliases
@@ -6,6 +7,7 @@ import { chainDescriptorRegistry } from './chainRegistry';
 interface ChainAliasConfig {
   descriptorName: string;
   aliases: string[];
+  descriptor?: any;
 }
 
 /**
@@ -33,12 +35,8 @@ export async function initializeDefaultChainDescriptors(
 ): Promise<void> {
   try {
     const defaultConfigs: ChainAliasConfig[] = includeDefaults ? [
-      { descriptorName: 'west', aliases: ['westend', 'westend2'] },
-      { descriptorName: 'west_asset_hub', aliases: ['westend_asset_hub', 'westend2_asset_hub'] },
-      { descriptorName: 'polkadot', aliases: ['polkadot'] },
-      { descriptorName: 'polkadot_asset_hub', aliases: ['polkadot_asset_hub'] },
-      { descriptorName: 'ksmcc3', aliases: ['kusama', 'ksmcc3'] },
-      { descriptorName: 'ksmcc3_asset_hub', aliases: ['kusama_asset_hub', 'ksmcc3_asset_hub'] }
+      { descriptorName: 'west', aliases: ['westend', 'westend2'], descriptor: west },
+      { descriptorName: 'west_asset_hub', aliases: ['westend_asset_hub', 'westend2_asset_hub'], descriptor: west_asset_hub }
     ] : [];
     
     // Combine default and custom configurations
@@ -46,9 +44,10 @@ export async function initializeDefaultChainDescriptors(
     
     // Register all descriptors
     for (const config of allConfigs) {
-      const descriptor = descriptors[config.descriptorName];
+      const descriptor = config.descriptor || descriptors[config.descriptorName];
       
       if (!descriptor) {
+        console.warn(`⚠️ No descriptor found for chain: ${config.descriptorName}`);
         continue;
       }
       

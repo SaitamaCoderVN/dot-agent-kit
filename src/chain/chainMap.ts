@@ -15,14 +15,14 @@ export interface ChainMap {
 export const defaultChainMap: ChainMap = {
   'westend': {
     url: 'wss://westend-rpc.dwellir.com',
-    name: 'westend',
-    apiKey: 'westend',
+    name: 'westend2',
+    apiKey: 'westend2',
     type: 'RelayChain'
   },
   'westend_asset_hub': {
-    url: 'wss://westmint-rpc.dwellir.com',
-    name: 'westend_asset_hub',
-    apiKey: 'westend_asset_hub',
+    url: 'wss://westmint-rpc-tn.dwellir.com',
+    name: 'westend2_asset_hub',
+    apiKey: 'westend2_asset_hub',
     type: 'ParaChain',
     paraId: 1000
   }

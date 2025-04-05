@@ -1,69 +1,42 @@
-import { tool } from '@langchain/core/tools';
+import { DynamicTool } from '@langchain/core/tools';
 import { z } from 'zod';
 import { PolkadotLangTools } from '../../tools/index';
 import { ChainMap, defaultChainMap } from '../../chain/chainMap';
 
-export const checkProxiesTool = (tools: PolkadotLangTools, chainMap: ChainMap = defaultChainMap) =>
-  tool(
-    async (input) => {
+interface ProxyParams {
+  chainName?: string;
+}
+
+export const checkProxiesTool = (tools: PolkadotLangTools, chainMap: ChainMap = defaultChainMap) => {
+  return new DynamicTool({
+    name: "check_proxies",
+    description: "Check proxy accounts on a specific chain",
+    func: async (input: string) => {
       try {
-        const chainName = input.chainName;
-        const targetChainName = chainName || Object.keys(chainMap)[0];
+        const params = JSON.parse(input) as ProxyParams;
+        const chainName = params.chainName || Object.keys(chainMap)[0];
         
-        if (!chainMap[targetChainName]) {
-          return {
-            content: JSON.stringify({
-              error: true,
-              message: `Chain "${targetChainName}" not found in chainMap`
-            }),
-            tool_call_id: `proxies_${Date.now()}`,
-          };
+        if (!chainMap[chainName]) {
+          return `Chain "${chainName}" not found in chainMap`;
         }
 
-        const proxies = await tools.checkProxies(targetChainName);
+        const proxies = await tools.checkProxies(chainName);
         
         if (proxies.length === 1 && 'error' in proxies[0]) {
-          return {
-            content: JSON.stringify({
-              error: true,
-              message: proxies[0].error
-            }),
-            tool_call_id: `proxies_${Date.now()}`,
-          };
+          return `Error checking proxies: ${proxies[0].error}`;
         }
         
         if (proxies.length === 0) {
-          return {
-            content: JSON.stringify({
-              message: `No proxy found on ${targetChainName}`
-            }),
-            tool_call_id: `proxies_${Date.now()}`,
-          };
+          return `No proxy found on ${chainName}`;
         }
         
-        return {
-          content: JSON.stringify({
-            message: `Proxy info on ${targetChainName}`,
-            data: proxies
-          }),
-          tool_call_id: `proxies_${Date.now()}`,
-        };
+        return `Proxy info on ${chainName}: ${JSON.stringify(proxies, null, 2)}`;
       } catch (error) {
-        console.error('Error: ', error);
-        return {
-          content: JSON.stringify({
-            error: true,
-            message: `Can't check proxy: ${error instanceof Error ? error.message : String(error)}`
-          }),
-          tool_call_id: `proxies_${Date.now()}`,
-        };
+        if (error instanceof Error) {
+          return `Error checking proxies: ${error.message}`;
+        }
+        return `Error checking proxies: ${String(error)}`;
       }
-    },
-    {
-      name: 'checkProxies',
-      description: 'Kiểm tra tất cả tài khoản proxy cho tài khoản mặc định trên chain được chỉ định',
-      schema: z.object({
-        chainName: z.string().optional().describe('Tên của chain để kiểm tra proxy (nếu không cung cấp, sẽ sử dụng chain đầu tiên trong chainMap)')
-      }),
-    },
-  );
+    }
+  });
+};

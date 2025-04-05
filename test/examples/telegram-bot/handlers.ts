@@ -20,10 +20,26 @@ not specify a chain (the first chain will be used by default)
 
 Please provide instructions, and I will assist you!`;
 
+const MAX_RETRIES = 3;
+const RETRY_DELAY = 5000; // 5 seconds
+
+async function retryOperation<T>(operation: () => Promise<T>, retries = MAX_RETRIES): Promise<T> {
+  try {
+    return await operation();
+  } catch (error) {
+    if (retries > 0) {
+      console.log(`Retrying operation in ${RETRY_DELAY}ms... (${retries} attempts remaining)`);
+      await new Promise(resolve => setTimeout(resolve, RETRY_DELAY));
+      return retryOperation(operation, retries - 1);
+    }
+    throw error;
+  }
+}
+
 export function setupHandlers(
   bot: Telegraf,
   llm: ChatOpenAI,
-  toolsByName: Record<string, Tool>,
+  tools: Record<string, Tool>,
 ): void {
   bot.start((ctx) => {
     ctx.reply(
@@ -42,48 +58,38 @@ export function setupHandlers(
     if (message.startsWith('/')) return;
 
     try {
-      const llmWithTools = llm.bindTools(Object.values(toolsByName));
-      const messages = [
-        new SystemMessage({ content: SYSTEM_PROMPT }),
-        new HumanMessage({ content: message }),
-      ];
+      await retryOperation(async () => {
+        const llmWithTools = llm.bindTools(Object.values(tools));
+        const messages = [
+          new SystemMessage({ content: SYSTEM_PROMPT }),
+          new HumanMessage({ content: message }),
+        ];
 
-      const aiMessage = await llmWithTools.invoke(messages);
-      console.log('aiMessage:', JSON.stringify(aiMessage, null, 2));
-      if (aiMessage.tool_calls && aiMessage.tool_calls.length > 0) {
-        for (const toolCall of aiMessage.tool_calls) {
-          console.log('toolCall:', JSON.stringify(toolCall, null, 2));
-          const selectedTool = toolsByName[toolCall.name];
-          if (selectedTool) {
-            const toolMessage = await selectedTool.invoke(toolCall);
-            console.log('toolMessage:', JSON.stringify(toolMessage, null, 2));
-            if (!toolMessage || !toolMessage.content) {
-              await ctx.reply('Tool did not return a response.');
-              return;
-            }
-            const response = JSON.parse(toolMessage.content || '{}');
-            if (response.error) {
-              await ctx.reply(`Error: ${response.message}`);
-            } else {
-              await ctx.reply(response.message || response.content || 'No message from tool.');
-            }
-          } else {
-            await ctx.reply(`Tool ${toolCall.name} not found.`);
-          }
-        }
-      } else {
-        const content = String(aiMessage.content || 'No response from LLM.');
-        console.log('LLM content:', content);
+        const response = await llmWithTools.invoke(messages);
+        const content = typeof response.content === 'string' 
+          ? response.content 
+          : JSON.stringify(response.content);
+        
         await ctx.reply(content);
-      }
+      });
     } catch (error) {
-      console.error('Error handling message:', error);
-      await ctx.reply(`Sorry, an error occurred: ${error instanceof Error ? error.message : String(error)}`);
+      console.error('Error processing message:', error);
+      let errorMessage = 'Sorry, I encountered an error while processing your request.';
+      
+      if (error instanceof Error) {
+        if (error.message.includes('ETIMEDOUT')) {
+          errorMessage += ' The connection timed out. Please try again later.';
+        } else if (error.message.includes('rate limit')) {
+          errorMessage += ' The service is currently busy. Please wait a moment and try again.';
+        }
+      }
+      
+      await ctx.reply(errorMessage);
     }
   });
 
   bot.catch((err, ctx) => {
-    console.error(`Error for ${ctx.updateType}`, err);
-    ctx.reply('An error occurred. Please try again.');
+    console.error(`Error for ${ctx.updateType}:`, err);
+    ctx.reply('An error occurred. Please try again later.');
   });
 }
